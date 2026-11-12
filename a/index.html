@@ -121,13 +121,13 @@ const mark = (el, when) => {
   el.querySelector(".done").textContent = `✓ 完了（${md(when)}）`;
 };
 
-const learn = read("chord_learning_archive").filter(e => (e.group || GROUP) === GROUP);
+const learn = read("chord_learning_v3_archive").filter(e => (e.group || GROUP) === GROUP);
 const dayDone = {};
 document.querySelectorAll("[data-day]").forEach(el => {
   const list = learn.filter(e => String(e.day) === el.dataset.day).map(e => e.start).filter(Boolean).sort();
   if (list.length) { dayDone[el.dataset.day] = list[list.length - 1]; mark(el, list[list.length - 1]); }
 });
-const tests = read("tonality_test_archive")
+const tests = read("tonality_test_v3_archive")
   .map(p => p.summary_obj && (p.summary_obj.end_time || p.summary_obj.start_time)).filter(Boolean).sort();
 
 // 最初のテスト：1回目のテスト。最後のテスト：4日目の学習のあとに受けたテスト（なければ2回目以降のテスト）
