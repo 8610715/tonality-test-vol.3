@@ -54,6 +54,7 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weig
 .sq.y{color:#111}
 .tbl{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;margin:6px 0}
 .ar{color:var(--sub);margin:0 4px}
+.seqcue{display:flex;align-items:center;flex-wrap:nowrap}.cg{display:inline-flex;flex-direction:column;align-items:center;gap:4px}.cgk{display:inline-flex;flex-direction:column;gap:3px}.cgk .dg{gap:2px}.cgk .dg i{border-width:1.5px}.seqcue{transform-origin:center}.seqcue .ar{margin:0 3px}
 .stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
 .stat div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 .stat b{display:block;font-size:24px}
@@ -282,7 +283,7 @@ function play(e){
 
 /* ===== ホーム ===== */
 const DAYTXT={1:'押し方 → 記号の練習 → 色の練習の入口',2:'記号の思い出し → 色の練習',3:'色の練習（手がかりが減ります）',4:'色の練習（最終日）'};
-const pid=()=>($('#pid').value||'').trim();
+const pid=()=>($('#pid').value||'').normalize('NFKC').trim();
 function renderDays(){
   const o=ls.get(LS,{}),p=pid(),st=(o[p]&&o[p].days)||{};
   $('#days').innerHTML=[1,2,3,4].map(d=>{const pr=p?getProgress(p,d):null,live=pr&&Date.now()-pr.last<=RESUME_MS;const txt=live?`中断中：${hhmm(pr.last+RESUME_MS)}まで続きから再開できます`:(st[d]?esc(st[d]):DAYTXT[d]);return `<button class="day ${st[d]&&!live?'done':''}" type="button" data-day="${d}"><b>${d}日目</b><span>${txt}</span></button>`;}).join('');
@@ -316,7 +317,7 @@ const INFO={
  setup:`<h1>準備</h1><div class="two"><div><h2>スマホの置き方</h2><ul><li>スマホを<b>横向き</b>にして机の上に置きます。</li><li><b>右手</b>の5本の指を、左から順に鍵盤の上に置きます。</li></ul>${keyrow}<p class="note">指はいつも同じ鍵盤に置いたままにします。</p></div><div><h2>音と環境</h2><ul><li><b>マナーモード（消音）を解除</b>し、音量を上げてください。イヤホンを使ってもかまいません。</li><li>静かな場所で、通知はできるだけオフにしてください。</li><li>途中で中断したり、ページが閉じてしまったりしても、<b>2時間以内</b>に同じページを開けば、中断したブロックの最初から再開できます。2時間を過ぎたら実験者に連絡してください。</li></ul></div></div>`,
  press:`<h1>押し方と図の見方</h1><div class="two"><div><h2>図の見方</h2><p>押す鍵盤を示す図が出ます。5つの四角のうち<b>黒い2つ</b>が押す鍵盤です。</p><p>${dg([1,3],32)}</p><p class="note">この図なら、1（親指）と3（中指）を同時に押します。</p><p class="note">鍵盤の位置と和音の音の高さは関係ありません（左ほど低い音、ではありません）。</p></div><div><h2>押し方のルール</h2>${RULES}</div></div><p>まず、図のとおりに押す練習を14回行います。和音の音もよく聞いてください。</p>`,
  chunk:`<h1>まとまり（記号）の練習</h1><p>記号1つが、2つの和音のまとまりを表します。</p><div class="two"><div><h2>4つのまとまり</h2>${chunkTbl}<p class="note">今は覚えなくて大丈夫です。練習の中で覚えていきます。</p></div><div><h2>進み方</h2><ol><li><b>手がかりあり</b>：記号と、押す鍵盤の図が出ます。図のとおりに弾きます。</li><li>すぐ次に<b>手がかりなし</b>：同じ記号だけが出ます。中身を思い出して弾きます。</li></ol><p class="note">思い出せないときは、左下の「思い出せない」を押すと次に進みます。</p></div></div>${POINTS}`,
- seq:`<h1>並び（色）の練習</h1><p>色1つが、まとまり4つの並びを表します。8つの和音を続けて弾きます。</p><div class="two"><div><h2>4つの並び</h2>${seqTbl}<p class="note">これも今は覚えなくて大丈夫です。</p></div><div><h2>進み方</h2><ul><li><b>手がかりあり</b>：色と、記号の並びが出ます（鍵盤の図は出ません）。</li><li><b>手がかりなし</b>：色だけが出ます。並び全体を思い出して弾きます。</li></ul></div></div>${POINTS}`,
+ seq:`<h1>並び（色）の練習</h1><p>色1つが、まとまり4つの並びを表します。8つの和音を続けて弾きます。</p><div class="two"><div><h2>4つの並び</h2>${seqTbl}<p class="note">これも今は覚えなくて大丈夫です。</p></div><div><h2>進み方</h2><ul><li><b>手がかりあり</b>：色と、記号の並びが出ます。記号の下に、押すボタンの図も出ます。</li><li><b>手がかりなし</b>：色だけが出ます。並び全体を思い出して弾きます。</li></ul></div></div>${POINTS}`,
  d2:`<h1>2日目</h1><p>昨日の続きです。押し方のルールは同じです。</p><div class="two"><div><h2>今日の流れ（20分以内）</h2><ol><li>まとまり（記号）の思い出し：1ブロック</li><li>並び（色）の練習：数ブロック</li></ol></div><div><h2>ルール</h2>${RULES}</div></div>${PREP}`,
  d34:d=>`<h1>${d}日目</h1><p>今日は並び（色）の練習だけです。${d===4?'今日が最終日です。':''}</p><div class="two"><div><h2>今日の流れ（20分以内）</h2><p>並びの練習を数ブロック行います。今日は<b>手がかりありが1回、そのあと手がかりなしが3回</b>の順に出ます。</p></div><div><h2>ルール</h2>${RULES}</div></div>${PREP}`
 };
@@ -397,8 +398,10 @@ function runBlock(st){const n=st.b==='practice'?1:st.b==='chunk'?2:8;B={st,phase
 function cueHTML(t){
   if(B.phase==='practice')return dg(ELEM[t.item].k,44);
   if(B.phase==='chunk')return shape(t.item,60)+(t.cued?`<span class="ar">｜</span>${t.targets.map(e=>dg(ELEM[e].k,28)).join('<span class="ar">→</span>')}`:'');
-  return badge(t.item)+(t.cued?`<span class="ar">｜</span>${SEQS[t.item].ch.map(c=>shape(c,44)).join('<span class="ar">→</span>')}`:'');
+  if(!t.cued)return badge(t.item);
+  return `<div class="seqcue">${badge(t.item)}<span class="ar">｜</span>${SEQS[t.item].ch.map(c=>`<span class="cg">${shape(c,34)}<span class="cgk">${CHUNKS[c].map(e=>dg(ELEM[e].k,17)).join('')}</span></span>`).join('<span class="ar">→</span>')}</div>`;
 }
+function fitCue(){const c=$('#cue'),e=c.querySelector('.seqcue');if(!e)return;const r=(c.clientWidth-8)/e.scrollWidth;if(r<1)e.style.transform=`scale(${r.toFixed(3)})`;}
 function renderAsts(){let h='';TR.t.targets.forEach((_,i)=>{if(i&&TR.t.cof[i]!==TR.t.cof[i-1])h+='<span class="gap"></span>';const p=TR.p[i];h+=`<span class="${p?(p.correct?'ok':'ng'):(i===TR.p.length?'cur':'')}">${p?(p.correct?'●':'×'):'＊'}</span>`;});$('#asts').innerHTML=h;}
 let trialTimer=null;
 function nextTrial(){
@@ -407,7 +410,7 @@ function nextTrial(){
   $('#barl').innerHTML=`${PHASENAME[B.phase]}　ブロック <b>${B.st.k||1}/${B.st.n||1}</b>　${B.ti+1}/${B.trials.length}回目　${t.cued?'手がかりあり':'<b>手がかりなし</b>'}`;
   $('#fb').textContent='';$('#cue').innerHTML='';$('#asts').innerHTML='';$('#skip').style.visibility='hidden';
   clearTimeout(trialTimer);
-  trialTimer=setTimeout(()=>{$('#cue').innerHTML=cueHTML(t);renderAsts();$('#skip').style.visibility=t.cued?'hidden':'visible';TR.t0=performance.now();accepting=true;},350);
+  trialTimer=setTimeout(()=>{$('#cue').innerHTML=cueHTML(t);fitCue();renderAsts();$('#skip').style.visibility=t.cued?'hidden':'visible';TR.t0=performance.now();accepting=true;},350);
 }
 function record(keys,times,el,tOn){
   if(!accepting||!TR)return;
