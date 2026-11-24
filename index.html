@@ -502,14 +502,35 @@ $('#dostop').addEventListener('click',()=>{$('#confirm').classList.remove('on');
 $('#keys').innerHTML=FINGER.map((f,i)=>`<div class="key" data-k="${i+1}"><b>${i+1}</b><small>${f}</small></div>`).join('');
 const keyEl={};document.querySelectorAll('.key').forEach(k=>keyEl[k.dataset.k]=k);
 const down=new Map(),ptr=new Map();let chordOn=false;
+/* 誤タッチ対策：①2つ目が来ないまま離れたタッチは無視 ②2つそろってから約30ms待ち、その間に離れたボタン（かすり）を除いて確定 ③確定後に触れた余分なボタンは無視 */
+const SETTLE_MS=30,SETTLE_MAX=100,QUICK_MS=20;let settleT=null,settleStart=0,pairStart=0,cand=null;
+function fire(ent){
+  chordOn=true;clearTimeout(settleT);settleT=null;
+  ent=ent.slice().sort((a,b)=>a[1]-b[1]);const ks=ent.map(x=>+x[0]),el=ent.length===2?PAIR[ks.slice().sort((a,b)=>a-b).join('-')]:null;
+  if(el)play(el);record(ks,ent.map(x=>x[1]),el,ent[ent.length-1][1]);
+}
+function commitChord(){
+  settleT=null;if(chordOn||down.size<2)return;
+  if(down.size>2&&performance.now()-settleStart<SETTLE_MAX){settleT=setTimeout(commitChord,SETTLE_MS);return;}
+  fire([...down.entries()]);
+}
+function settle(){
+  if(chordOn)return;clearTimeout(settleT);settleT=null;
+  if(down.size>=2){const now=performance.now();if(!settleStart)settleStart=now;if(down.size===2)pairStart=now;settleT=setTimeout(commitChord,SETTLE_MS);}else settleStart=0;
+}
 function kDown(k,t){
-  if(down.has(k))return;down.set(k,t);keyEl[k].classList.add('down');
-  if(!chordOn){if(down.size===2){chordOn=true;const ent=[...down.entries()].sort((a,b)=>a[1]-b[1]),ks=ent.map(x=>+x[0]),el=PAIR[ks.slice().sort((a,b)=>a-b).join('-')];if(el)play(el);record(ks,ent.map(x=>x[1]),el,t);}}
-  else markExtra();
+  if(down.has(k))return;down.set(k,t);keyEl[k].classList.add('down');cand=null;
+  if(!chordOn)settle();
 }
 function kUp(k){
-  if(!down.has(k))return;const t=down.get(k);down.delete(k);keyEl[k].classList.remove('down');
-  if(!down.size){if(chordOn)chordOn=false;else record([+k],[t],null,t);}
+  if(!down.has(k))return;
+  if(!chordOn&&down.size===2)cand={ent:[...down.entries()],dur:performance.now()-pairStart};
+  down.delete(k);keyEl[k].classList.remove('down');
+  if(!chordOn){
+    // 2つをごく短く同時に押してすぐ離した場合（待ち時間内に両方離れた）は、その2つで確定
+    if(!down.size&&cand&&cand.dur>=QUICK_MS)fire(cand.ent);else settle();
+  }
+  if(!down.size){chordOn=false;settleStart=0;clearTimeout(settleT);settleT=null;cand=null;}
 }
 const ts=e=>(e&&e.timeStamp>0&&e.timeStamp<performance.now()+1000)?e.timeStamp:performance.now();
 $('#keys').addEventListener('pointerdown',e=>{const k=e.target.closest('.key');if(!k)return;e.preventDefault();ptr.set(e.pointerId,k.dataset.k);kDown(k.dataset.k,ts(e));});
