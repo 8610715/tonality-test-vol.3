@@ -102,6 +102,7 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weig
       <li>時間：1日20分以内</li>
       <li>使うもの：スマホ（横向き）、右手、音が出る環境</li>
       <li>名前などの個人情報は記録しません。実験者から伝えられた参加者IDだけを使います。</li>
+      <li>途中で中断しても、2時間以内なら同じページを開いて続きから再開できます。</li>
     </ul>
     <div class="row">
       <label for="pid"><b>参加者ID</b></label>
@@ -135,11 +136,11 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weig
 
 <section id="info" class="screen">
   <div class="scroll"><div class="wrap" id="infobody"></div></div>
-  <div class="bottom"><span class="note" id="infostep"></span><span class="row"><button class="btn sub" id="infoback" type="button" hidden>中止</button><button class="btn" id="infonext" type="button">次へ</button></span></div>
+  <div class="bottom"><span class="note" id="infostep"></span><span class="row"><button class="btn sub" id="infoback" type="button" hidden>中断</button><button class="btn" id="infonext" type="button">次へ</button></span></div>
 </section>
 
 <section id="task" class="screen">
-  <div class="bar"><button id="stop" type="button">中止</button><span class="grow" id="barl"></span><span>点数 <b id="score">0</b></span></div>
+  <div class="bar"><button id="stop" type="button">中断</button><span class="grow" id="barl"></span><span>点数 <b id="score">0</b></span></div>
   <div class="cue">
     <div class="cueline" id="cue"></div>
     <div class="asts" id="asts"></div>
@@ -150,9 +151,9 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weig
 </section>
 
 <div id="confirm"><div>
-  <p><b>実験を中止しますか？</b></p>
-  <p class="note">ここまでのデータは保存・送信されます。中止した日は、実験者の指示に従ってください。</p>
-  <div class="row" style="justify-content:flex-end"><button class="btn sub" id="cancelstop" type="button">続ける</button><button class="btn" id="dostop" type="button">中止する</button></div>
+  <p><b>練習を中断しますか？</b></p>
+  <p class="note">ここまでのデータは保存・送信されます。<b>2時間以内</b>に同じページを開くと、今のブロックの最初から再開できます。</p>
+  <div class="row" style="justify-content:flex-end"><button class="btn sub" id="cancelstop" type="button">続ける</button><button class="btn" id="dostop" type="button">中断する</button></div>
 </div></div>
 
 <div id="rotate">スマホを横向きにしてください<br>（画面の向きのロックはオフに）</div>
@@ -160,7 +161,7 @@ summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weig
 <script>
 {
 /* ===== 送信先：Apps Script のウェブアプリURLをここに貼るか、実験者用の設定欄に入力 ===== */
-const GAS_URL_DEFAULT = "https://script.google.com/macros/s/AKfycbxbg1Hb76U7-lD2VP_PGzTKpmaYZuUFWA5WC5LcHb2mF2s4O3uDzvwtFxRCf9nnF3596Q/exec";
+const GAS_URL_DEFAULT = "";
 
 const $=s=>document.querySelector(s);
 const ELEM={C:{k:[1,3],f:'I_C.wav'},Dm:{k:[3,4],f:'ii_C.wav'},Em:{k:[1,2],f:'iii_C.wav'},F:{k:[3,5],f:'IV_C.wav'},G:{k:[2,5],f:'V_C.wav'},Am:{k:[1,5],f:'vi_C.wav'},Bdim:{k:[2,4],f:'viio_C.wav'}};
@@ -181,13 +182,22 @@ const pad=n=>String(n).padStart(2,'0');
 const stamp=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 
 /* ===== データ形式 ===== */
-const COLS=['participant','day','phase','block','trial','item','cued','pos','target','target_keys','pressed_keys','key1','key1_ms','key2','key2_ms','onset_ms','async_ms','interval_ms','interval_type','correct','trial_complete','trial_correct','mt_ms','points','session_id','time'];
-const LOGCOLS=['session_id','participant','day','status','start','end','n_trials','n_trials_correct','points','user_agent'];
+const COLS=['participant','day','phase','block','attempt','block_complete','trial','item','cued','after_cue','pos','target','target_keys','pressed_keys','key1','key1_ms','key2','key2_ms','onset_ms','async_ms','interval_ms','interval_type','correct','trial_complete','trial_correct','mt_ms','points','session_id','time'];
+const LOGCOLS=['session_id','participant','day','status','attempt','start','end','n_trials','n_trials_correct','points','user_agent'];
 const cell=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
 const toCSV=rows=>[COLS.join(',')].concat(rows.map(r=>COLS.map(c=>cell(r[c])).join(','))).join('\n');
 
 /* ===== 端末内の控え ===== */
 const LS='chordpilot-v2',PKEY='chordpilot-pending',GKEY='chordpilot-gas',IDKEY='chordpilot-pid';
+/* ===== 中断からの再開（中断から2時間以内なら、中断したブロックの最初から） ===== */
+const PROG='chordpilot-progress',RESUME_MS=2*60*60*1000;
+const progKey=(p,d)=>p+'|'+d;
+const getProgress=(p,d)=>ls.get(PROG,{})[progKey(p,d)]||null;
+function clearProgress(p,d){const o=ls.get(PROG,{});delete o[progKey(p,d)];ls.set(PROG,o);}
+function saveProgress(){if(!S)return;const o=ls.get(PROG,{});o[progKey(S.pid,S.day)]={sid:S.sid,csv:S.csv,start:S.start.toISOString(),i:S.i,score:S.score,prevMed:S.prevMed,elapsed:S.taskStart?performance.now()-S.taskStart:0,nTr:S.nTr,nOK:S.nOK,attempt:S.attempt,last:Date.now(),inflight:(B&&B.live&&B.rows.length)?B.rows:null};ls.set(PROG,o);}
+/* 前回ページが閉じたときに途中だったブロックの記録を、未完了（block_complete=0）として送信待ちに入れる */
+function salvage(){const o=ls.get(PROG,{});let n=0;for(const k in o){const pr=o[k];if(pr&&pr.inflight&&pr.inflight.length){const rows=pr.inflight.map(r=>Object.assign({},r,{block_complete:0}));const [pp,dd]=k.split('|');localSave(pp,+dd,rows);queueRows(pr.sid,pr.csv,rows,`${pr.sid}_inflight_${pr.last}`);pr.inflight=null;n++;}}if(n)ls.set(PROG,o);return n;}
+const hhmm=t=>{const d=new Date(t);return d.getHours()+':'+pad(d.getMinutes());};
 function localSave(pid,day,rows){const o=ls.get(LS,{});o[pid]=o[pid]||{days:{},rows:{}};const k='d'+day;o[pid].rows[k]=(o[pid].rows[k]||[]).concat(rows);ls.set(LS,o);}
 function markDay(pid,day,status){const o=ls.get(LS,{});o[pid]=o[pid]||{days:{},rows:{}};o[pid].days[day]=status+'（'+new Date().toLocaleDateString('ja-JP')+'）';ls.set(LS,o);}
 const allRows=()=>{const o=ls.get(LS,{}),out=[];for(const p in o)for(const k in (o[p].rows||{}))out.push(...o[p].rows[k]);return out;};
@@ -225,7 +235,8 @@ async function flush(){
 }
 function enqueue(p){const l=pending();if(!l.some(x=>x.batch_id===p.batch_id))l.push(p);ls.set(PKEY,l);}
 async function flushSoon(){while(sending)await new Promise(r=>setTimeout(r,200));return flush();}
-function sendRows(sid,name,rows,batch){enqueue({action:'append',batch_id:batch,session_id:sid,csv_name:name,columns:COLS,rows:rows.map(r=>COLS.map(c=>r[c]??''))});return flushSoon();}
+function queueRows(sid,name,rows,batch){enqueue({action:'append',batch_id:batch,session_id:sid,csv_name:name,columns:COLS,rows:rows.map(r=>COLS.map(c=>r[c]??''))});}
+function sendRows(sid,name,rows,batch){queueRows(sid,name,rows,batch);return flushSoon();}
 function sendLog(row,batch){enqueue({action:'append',batch_id:batch,session_id:row.session_id,csv_name:'sessions_log.csv',columns:LOGCOLS,rows:[LOGCOLS.map(c=>row[c]??'')]});return flushSoon();}
 const sendText=r=>!r?'送信中です…':(r.left?`送信できなかったデータが${r.left}件あります（${r.reason||'送信待ち'}）。この端末には保存済みで、次に開いたときに再送します。`:'データを送信しました。');
 
@@ -274,7 +285,7 @@ const DAYTXT={1:'押し方 → 記号の練習 → 色の練習の入口',2:'記
 const pid=()=>($('#pid').value||'').trim();
 function renderDays(){
   const o=ls.get(LS,{}),p=pid(),st=(o[p]&&o[p].days)||{};
-  $('#days').innerHTML=[1,2,3,4].map(d=>`<button class="day ${st[d]?'done':''}" type="button" data-day="${d}"><b>${d}日目</b><span>${st[d]?esc(st[d]):DAYTXT[d]}</span></button>`).join('');
+  $('#days').innerHTML=[1,2,3,4].map(d=>{const pr=p?getProgress(p,d):null,live=pr&&Date.now()-pr.last<=RESUME_MS;const txt=live?`中断中：${hhmm(pr.last+RESUME_MS)}まで続きから再開できます`:(st[d]?esc(st[d]):DAYTXT[d]);return `<button class="day ${st[d]&&!live?'done':''}" type="button" data-day="${d}"><b>${d}日目</b><span>${txt}</span></button>`;}).join('');
 }
 $('#pid').value=ls.get(IDKEY,'');
 $('#pid').addEventListener('input',()=>{ls.set(IDKEY,pid());renderDays();});
@@ -297,13 +308,13 @@ $('#expclear').addEventListener('click',()=>{if(!clearArm){clearArm=true;$('#exp
 const keyrow=`<div class="row" style="gap:4px;margin:6px 0">${FINGER.map((f,i)=>`<span style="flex:1;border:1px solid var(--line);border-radius:6px;padding:6px 0;text-align:center;font-size:13px;line-height:1.3"><b style="font-size:18px">${i+1}</b><br>${f}</span>`).join('')}</div>`;
 const chunkTbl=`<div class="tbl">${Object.keys(CHUNKS).map(c=>`${shape(c,36)}<span>${CHUNKS[c].map(e=>dg(ELEM[e].k,20)).join('<span class="ar">→</span>')}</span>`).join('')}</div>`;
 const seqTbl=`<div class="tbl">${Object.keys(SEQS).map(s=>`${badge(s,18)}<span>${SEQS[s].ch.map(c=>shape(c,26)).join(' ')}</span>`).join('')}</div>`;
-const RULES=`<ul><li>2つの鍵盤を<b>同時に</b>押すと和音が鳴ります。</li><li>押したら<b>指を全部離してから</b>次の和音を押します。</li><li><b>正確に、できるだけ速く</b>弾いてください。</li><li>間違えても止まらず、<b>最後まで</b>弾き切ってください。</li><li>画面の＊は、押すたびに <b style="color:var(--ok)">●</b>（正解）か <b style="color:var(--ng)">×</b>（間違い）に変わります。</li><li>続けられないときは、左上の「中止」を押してください。</li></ul>`;
+const RULES=`<ul><li>2つの鍵盤を<b>同時に</b>押すと和音が鳴ります。</li><li>押したら<b>指を全部離してから</b>次の和音を押します。</li><li><b>正確に、できるだけ速く</b>弾いてください。</li><li><b>押す速さ（和音と和音の間の時間）も記録しています。</b>1回の中では、和音と和音の間をできるだけ空けずに、続けて弾いてください。休憩はブロックの切れ目でとってください。</li><li>間違えても止まらず、<b>最後まで</b>弾き切ってください。</li><li>画面の＊は、押すたびに <b style="color:var(--ok)">●</b>（正解）か <b style="color:var(--ng)">×</b>（間違い）に変わります。</li><li>続けられないときは、左上の「中断」を押してください。<b>2時間以内</b>に同じページを開くと、そのブロックの最初から再開できます。</li></ul>`;
 const POINTS=`<h2>点数</h2><ul><li>まとまり（記号1つ分）を正しく弾くごとに1点</li><li>全部正しく弾けたら、前のブロックの自分より速ければ＋3点、そうでなければ＋1点</li><li>1つでも間違えると−1点</li></ul><p class="note">速さより、まず正確さを大切にしてください。</p>`;
 const PREP=`<p class="note">準備：スマホを横向きにして机に置く／右手の5本の指を鍵盤に置く／マナーモードを解除して音量を上げる。</p>`;
 const INFO={
- welcome:`<h1>この実験について</h1><p>これから4日間、スマホの鍵盤で「和音の並び」を覚えて弾く練習をしてもらいます。</p><p>画面の下に5つの鍵盤が出ます。鍵盤を<b>2つ同時に</b>押すと、ピアノの和音が1つ鳴ります。押す組み合わせによって、鳴る和音が変わります。</p><p>和音の並びは、2つの和音でできた<b>「まとまり」</b>を4つつなげたものです。まとまりには ${shape('circle',22)} ${shape('triangle',22)} ${shape('square',22)} ${shape('star',22)} の記号が、並び全体には ${badge('red')} などの色が付いています。最初は手がかりを見ながら弾き、だんだん記憶から弾けるように練習します。</p><h2>今日の流れ（20分以内）</h2><ol><li>押し方と図の見方の練習（約2分）</li><li>まとまり（記号）の練習（約10分）</li><li>並び（色）の練習の入口（約4分）</li></ol><p class="note">ブロックの切れ目で休憩できます。音楽の経験は関係ありません。</p>`,
- setup:`<h1>準備</h1><div class="two"><div><h2>スマホの置き方</h2><ul><li>スマホを<b>横向き</b>にして机の上に置きます。</li><li><b>右手</b>の5本の指を、左から順に鍵盤の上に置きます。</li></ul>${keyrow}<p class="note">指はいつも同じ鍵盤に置いたままにします。</p></div><div><h2>音と環境</h2><ul><li><b>マナーモード（消音）を解除</b>し、音量を上げてください。イヤホンを使ってもかまいません。</li><li>静かな場所で、通知はできるだけオフにしてください。</li><li>途中でページを閉じると、その日の練習は最初からになります（終わったブロックのデータは保存・送信済みです）。</li></ul></div></div>`,
- press:`<h1>押し方と図の見方</h1><div class="two"><div><h2>図の見方</h2><p>押す鍵盤を示す図が出ます。5つの四角のうち<b>黒い2つ</b>が押す鍵盤です。</p><p>${dg([1,3],32)}</p><p class="note">この図なら、1（親指）と3（中指）を同時に押します。</p></div><div><h2>押し方のルール</h2>${RULES}</div></div><p>まず、図のとおりに押す練習を14回行います。和音の音もよく聞いてください。</p>`,
+ welcome:`<h1>この実験について</h1><p>これから4日間、スマホの鍵盤で「和音の並び」を覚えて弾く練習をしてもらいます。</p><p>画面の下に5つの鍵盤が出ます。鍵盤を<b>2つ同時に</b>押すと、ピアノの和音が1つ鳴ります。押す組み合わせによって、鳴る和音が変わります。</p><p><b>この鍵盤はピアノの鍵盤とは違います。</b>左の鍵盤ほど低い音、右ほど高い音、という関係はありません。どの2つを押すとどの和音が鳴るかは、この実験のために決めた組み合わせです。押す指や鍵盤の位置と、鳴る和音の種類や音の高さは対応していないので、音の高さから押す場所を考えることはできません。押し方と音の結びつきは、練習しながら覚えていってください。</p><p>和音の並びは、2つの和音でできた<b>「まとまり」</b>を4つつなげたものです。まとまりには ${shape('circle',22)} ${shape('triangle',22)} ${shape('square',22)} ${shape('star',22)} の記号が、並び全体には ${badge('red')} などの色が付いています。最初は手がかりを見ながら弾き、だんだん記憶から弾けるように練習します。</p><p>この実験では、どの和音を押したかだけでなく、<b>押す速さ（和音と和音の間の時間）</b>も記録しています。1回の中では間を空けずに続けて弾くよう心がけてください。</p><h2>今日の流れ（20分以内）</h2><ol><li>押し方と図の見方の練習（約2分）</li><li>まとまり（記号）の練習（約10分）</li><li>並び（色）の練習の入口（約4分）</li></ol><p class="note">ブロックの切れ目で休憩できます。音楽の経験は関係ありません。</p>`,
+ setup:`<h1>準備</h1><div class="two"><div><h2>スマホの置き方</h2><ul><li>スマホを<b>横向き</b>にして机の上に置きます。</li><li><b>右手</b>の5本の指を、左から順に鍵盤の上に置きます。</li></ul>${keyrow}<p class="note">指はいつも同じ鍵盤に置いたままにします。</p></div><div><h2>音と環境</h2><ul><li><b>マナーモード（消音）を解除</b>し、音量を上げてください。イヤホンを使ってもかまいません。</li><li>静かな場所で、通知はできるだけオフにしてください。</li><li>途中で中断したり、ページが閉じてしまったりしても、<b>2時間以内</b>に同じページを開けば、中断したブロックの最初から再開できます。2時間を過ぎたら実験者に連絡してください。</li></ul></div></div>`,
+ press:`<h1>押し方と図の見方</h1><div class="two"><div><h2>図の見方</h2><p>押す鍵盤を示す図が出ます。5つの四角のうち<b>黒い2つ</b>が押す鍵盤です。</p><p>${dg([1,3],32)}</p><p class="note">この図なら、1（親指）と3（中指）を同時に押します。</p><p class="note">鍵盤の位置と和音の音の高さは関係ありません（左ほど低い音、ではありません）。</p></div><div><h2>押し方のルール</h2>${RULES}</div></div><p>まず、図のとおりに押す練習を14回行います。和音の音もよく聞いてください。</p>`,
  chunk:`<h1>まとまり（記号）の練習</h1><p>記号1つが、2つの和音のまとまりを表します。</p><div class="two"><div><h2>4つのまとまり</h2>${chunkTbl}<p class="note">今は覚えなくて大丈夫です。練習の中で覚えていきます。</p></div><div><h2>進み方</h2><ol><li><b>手がかりあり</b>：記号と、押す鍵盤の図が出ます。図のとおりに弾きます。</li><li>すぐ次に<b>手がかりなし</b>：同じ記号だけが出ます。中身を思い出して弾きます。</li></ol><p class="note">思い出せないときは、左下の「思い出せない」を押すと次に進みます。</p></div></div>${POINTS}`,
  seq:`<h1>並び（色）の練習</h1><p>色1つが、まとまり4つの並びを表します。8つの和音を続けて弾きます。</p><div class="two"><div><h2>4つの並び</h2>${seqTbl}<p class="note">これも今は覚えなくて大丈夫です。</p></div><div><h2>進み方</h2><ul><li><b>手がかりあり</b>：色と、記号の並びが出ます（鍵盤の図は出ません）。</li><li><b>手がかりなし</b>：色だけが出ます。並び全体を思い出して弾きます。</li></ul></div></div>${POINTS}`,
  d2:`<h1>2日目</h1><p>昨日の続きです。押し方のルールは同じです。</p><div class="two"><div><h2>今日の流れ（20分以内）</h2><ol><li>まとまり（記号）の思い出し：1ブロック</li><li>並び（色）の練習：数ブロック</li></ol></div><div><h2>ルール</h2>${RULES}</div></div>${PREP}`,
@@ -326,8 +337,30 @@ function goHome(){if(location.hash){history.replaceState(null,'',location.pathna
 function startDay(d){
   const p=pid();
   if(!p){history.replaceState(null,'',location.pathname+location.search);show('home');renderDays();$('#homemsg').textContent='先に参加者IDを入力してください。';$('#pid').focus();return;}
+  const pr=getProgress(p,d);
+  if(pr)return Date.now()-pr.last<=RESUME_MS?resumePrompt(p,d,pr):expiredPrompt(p,d,pr);
+  newSession(p,d);
+}
+function newSession(p,d){
+  clearProgress(p,d);
   const t0=new Date();
-  S={pid:p,day:d,plan:PLANS[d],i:0,score:0,taskStart:null,prevMed:{},rows:[],nTr:0,nOK:0,start:t0,sid:`${p}_d${d}_${t0.getTime().toString(36)}`,csv:`chord_pilot_${p}_day${d}_${stamp(t0)}.csv`.replace(/[^\w.-]/g,'_'),sends:[]};
+  S={pid:p,day:d,plan:PLANS[d],i:0,score:0,taskStart:null,prevMed:{},rows:[],nTr:0,nOK:0,start:t0,sid:`${p}_d${d}_${t0.getTime().toString(36)}`,csv:`chord_pilot_${p}_day${d}_${stamp(t0)}.csv`.replace(/[^\w.-]/g,'_'),sends:[],attempt:1};
+  runStep();
+}
+function whereText(d,i){const st=PLANS[d][i];if(!st)return '最後の画面';return st.b?`${PHASENAME[st.b]}${st.n?`　ブロック ${st.k}／${st.n}`:''}の最初`:'説明の画面';}
+function resumePrompt(p,d,pr){
+  info(`<h1>${d}日目の続きから再開します</h1><p>${hhmm(pr.last)}に中断した練習があります。<b>${whereText(d,pr.i)}</b>から再開します。</p><p class="note">中断したブロックは、最初からもう一度行います。再開できるのは ${hhmm(pr.last+RESUME_MS)} までです。</p><p class="note">実験者から「最初からやり直す」ように指示されたときだけ、下のボタンを使ってください。</p><div class="row"><button class="btn sub" id="restart" type="button">最初からやり直す</button></div>`,`${d}日目`,'続きから再開',()=>resumeSession(p,d,pr),false);
+  $('#restart').onclick=()=>newSession(p,d);
+}
+function expiredPrompt(p,d,pr){
+  info(`<h1>${d}日目は続きから再開できません</h1><p>${hhmm(pr.last)}に中断してから2時間を過ぎたため、続きからは再開できません。どうするかは、実験者の指示に従ってください。</p><p class="note">実験者から指示があった場合だけ、下のボタンで最初から始めてください。</p><div class="row"><button class="btn sub" id="restart" type="button">最初から始める</button></div>`,`${d}日目`,'ホームに戻る',goHome,false);
+  $('#restart').onclick=()=>newSession(p,d);
+}
+function resumeSession(p,d,pr){
+  S={pid:p,day:d,plan:PLANS[d],i:pr.i,score:pr.score,taskStart:pr.elapsed?performance.now()-pr.elapsed:null,prevMed:pr.prevMed||{},rows:[],nTr:pr.nTr,nOK:pr.nOK,start:new Date(pr.start),sid:pr.sid,csv:pr.csv,sends:[],attempt:(pr.attempt||1)+1};
+  saveProgress();
+  sendLog({session_id:S.sid,participant:p,day:d,status:'再開',attempt:S.attempt,start:new Date(pr.last).toISOString(),end:new Date().toISOString(),n_trials:S.nTr,n_trials_correct:S.nOK,points:S.score,user_agent:navigator.userAgent},`${S.sid}_resume${S.attempt}_${Date.now()}`);
+  $('#score').textContent=S.score;
   runStep();
 }
 function runStep(){
@@ -348,18 +381,19 @@ function runStep(){
     if(!ok){m.className='msg ng';m.textContent=(audioErr||'音を準備できませんでした')+'。もう一度「はじめる」を押してください。';return;}
     if(!S)return;
     if(!S.taskStart)S.taskStart=performance.now();
+    saveProgress();
     runBlock(st);
   },true);
 }
 function buildTrials(st){
   const T=[],cof=[0,0,1,1,2,2,3,3],seqT=s=>[].concat(...SEQS[s].ch.map(c=>CHUNKS[c]));
-  if(st.b==='practice'){for(let r=0;r<2;r++)shuffle(Object.keys(ELEM)).forEach(e=>T.push({item:e,cued:1,targets:[e],cof:[0]}));}
-  else if(st.b==='chunk')shuffle([].concat(...Object.keys(CHUNKS).map(c=>[c,c,c]))).forEach(c=>T.push({item:c,cued:1,targets:CHUNKS[c],cof:[0,0]},{item:c,cued:0,targets:CHUNKS[c],cof:[0,0]}));
-  else if(st.mode==='alt')shuffle([].concat(...Object.keys(SEQS).map(s=>[s,s,s]))).forEach(s=>T.push({item:s,cued:1,targets:seqT(s),cof},{item:s,cued:0,targets:seqT(s),cof}));
-  else shuffle(Object.keys(SEQS)).forEach(s=>{T.push({item:s,cued:1,targets:seqT(s),cof});for(let r=0;r<3;r++)T.push({item:s,cued:0,targets:seqT(s),cof});});
+  if(st.b==='practice'){for(let r=0;r<2;r++)shuffle(Object.keys(ELEM)).forEach(e=>T.push({item:e,cued:1,targets:[e],cof:[0],ac:''}));}
+  else if(st.b==='chunk')shuffle([].concat(...Object.keys(CHUNKS).map(c=>[c,c,c]))).forEach(c=>T.push({item:c,cued:1,targets:CHUNKS[c],cof:[0,0],ac:0},{item:c,cued:0,targets:CHUNKS[c],cof:[0,0],ac:1}));
+  else if(st.mode==='alt')shuffle([].concat(...Object.keys(SEQS).map(s=>[s,s,s]))).forEach(s=>T.push({item:s,cued:1,targets:seqT(s),cof,ac:0},{item:s,cued:0,targets:seqT(s),cof,ac:1}));
+  else shuffle(Object.keys(SEQS)).forEach(s=>{T.push({item:s,cued:1,targets:seqT(s),cof,ac:0});for(let r=0;r<3;r++)T.push({item:s,cued:0,targets:seqT(s),cof,ac:r+1});});
   return T;
 }
-function runBlock(st){const n=st.b==='practice'?1:st.b==='chunk'?2:8;B={st,phase:st.b,trials:buildTrials(st),ti:0,rows:[],mts:[],ok:0,pts:0,mmt:S.prevMed[st.b]||n*600};show('task');nextTrial();}
+function runBlock(st){const n=st.b==='practice'?1:st.b==='chunk'?2:8;B={st,phase:st.b,trials:buildTrials(st),ti:0,rows:[],mts:[],ok:0,pts:0,mmt:S.prevMed[st.b]||n*600,live:true};show('task');nextTrial();}
 function cueHTML(t){
   if(B.phase==='practice')return dg(ELEM[t.item].k,44);
   if(B.phase==='chunk')return shape(t.item,60)+(t.cued?`<span class="ar">｜</span>${t.targets.map(e=>dg(ELEM[e].k,28)).join('<span class="ar">→</span>')}`:'');
@@ -397,11 +431,12 @@ function finishTrial(complete){
   const now=new Date().toISOString();
   for(let i=0;i<n;i++){
     const p=P[i],q=P[i-1];
-    B.rows.push({participant:S.pid,day:S.day,phase:B.phase,block:B.st.k||1,trial:B.ti+1,item:t.item,cued:t.cued,pos:i+1,target:t.targets[i],target_keys:ELEM[t.targets[i]].k.join('+'),
+    B.rows.push({participant:S.pid,day:S.day,phase:B.phase,block:B.st.k||1,attempt:S.attempt,trial:B.ti+1,item:t.item,cued:t.cued,after_cue:t.ac,pos:i+1,target:t.targets[i],target_keys:ELEM[t.targets[i]].k.join('+'),
       pressed_keys:p?p.keys.join('+'):'',key1:p?p.keys[0]:'',key1_ms:p&&p.times[0]!=null?p.times[0].toFixed(1):'',key2:p&&p.keys[1]!=null?p.keys[1]:'',key2_ms:p&&p.times[1]!=null?p.times[1].toFixed(1):'',
       onset_ms:p?p.onset.toFixed(1):'',async_ms:p?p.async.toFixed(1):'',interval_ms:p&&q?(p.onset-q.onset).toFixed(1):'',interval_type:!i||B.phase==='practice'?'':(t.cof[i]===t.cof[i-1]?'within':'between'),
       correct:p?(p.correct?1:0):'',trial_complete:complete?1:0,trial_correct:allOK?1:0,mt_ms:mt==null?'':mt.toFixed(1),points:pts,session_id:S.sid,time:now});
   }
+  saveProgress();
   renderAsts();
   const fb=$('#fb');
   if(B.phase==='practice'){fb.textContent=allOK?'OK':'図をよく見てみましょう';fb.className=allOK?'p':'m';}
@@ -410,14 +445,22 @@ function finishTrial(complete){
   clearTimeout(trialTimer);trialTimer=setTimeout(()=>{B.ti++;nextTrial();},900);
 }
 $('#skip').addEventListener('click',()=>{if(accepting&&TR)finishTrial(false);});
-function saveBlock(){
-  if(!B||!B.rows.length)return null;
-  const rows=B.rows;B.rows=[];S.rows.push(...rows);localSave(S.pid,S.day,rows);
-  const p=sendRows(S.sid,S.csv,rows,`${S.sid}_${B.phase}_b${B.st.k||1}_${S.rows.length}`);S.sends.push(p);return p;
+function stashRows(complete){
+  if(!S||!B||!B.rows.length)return false;
+  const rows=B.rows.map(r=>Object.assign(r,{block_complete:complete?1:0}));B.rows=[];B.live=false;S.rows.push(...rows);localSave(S.pid,S.day,rows);
+  queueRows(S.sid,S.csv,rows,`${S.sid}_a${S.attempt}_${B.phase}_b${B.st.k||1}_${S.rows.length}`);return true;
 }
+function saveBlock(complete){
+  if(!stashRows(complete))return null;
+  const p=flushSoon();S.sends.push(p);return p;
+}
+/* ページを閉じた・画面が消えたときも、そこまでのデータと進み具合を残す */
+function onHide(){if(S)saveProgress();}
+window.addEventListener('pagehide',onHide);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')onHide();});
 async function endBlock(){
   const med=median(B.mts);if(med)S.prevMed[B.phase]=med;
-  const sp=saveBlock();S.i++;
+  const sp=saveBlock(true);S.i++;saveProgress();
   try{if(document.fullscreenElement){const q=document.exitFullscreen();if(q&&q.catch)q.catch(()=>{});}}catch(e){}
   let h;
   if(B.phase==='practice')h=`<h1>押し方の練習はおわりです</h1><p>14回中 ${B.ok}回、図のとおりに押せました。次は、記号の練習の説明です。</p>`;
@@ -429,26 +472,28 @@ async function endBlock(){
   if(sp)sp.then(r=>{const el=$('#savest');if(el)el.textContent=sendText(r);});
 }
 async function endDay(status,capped){
+  if(status==='中断')saveProgress();else clearProgress(S.pid,S.day);
   const s=S;S=null;accepting=false;clearTimeout(trialTimer);
-  markDay(s.pid,s.day,status==='完了'?'済':'中止');
+  markDay(s.pid,s.day,status==='完了'?'済':'中断');
   try{if(document.fullscreenElement){const q=document.exitFullscreen();if(q&&q.catch)q.catch(()=>{});}}catch(e){}
-  const log={session_id:s.sid,participant:s.pid,day:s.day,status:status,start:s.start.toISOString(),end:new Date().toISOString(),n_trials:s.nTr,n_trials_correct:s.nOK,points:s.score,user_agent:navigator.userAgent};
-  const head=status==='中止'?`<h1>${s.day}日目の練習を中止しました</h1><p>ここまでのデータは保存しました。続きをどうするかは、実験者の指示に従ってください。</p>`:`<h1>${s.day}日目の練習はおわりです</h1><p>おつかれさまでした。${capped?'時間になったので、ここで終了します。':''}${s.day<4?'次は明日、'+(s.day+1)+'日目を行ってください。':'4日間の練習はすべておわりです。ご協力ありがとうございました。'}</p>`;
+  const log={session_id:s.sid,participant:s.pid,day:s.day,status:status,attempt:s.attempt,start:s.start.toISOString(),end:new Date().toISOString(),n_trials:s.nTr,n_trials_correct:s.nOK,points:s.score,user_agent:navigator.userAgent};
+  const head=status==='中断'?`<h1>${s.day}日目の練習を中断しました</h1><p>ここまでのデータは保存しました。</p><p><b>${hhmm(Date.now()+RESUME_MS)}までに同じリンクを開くと、中断したブロックの最初から再開できます。</b>それを過ぎた場合は、実験者に連絡してください。</p>`:`<h1>${s.day}日目の練習はおわりです</h1><p>おつかれさまでした。${capped?'時間になったので、ここで終了します。':''}${s.day<4?'次は明日、'+(s.day+1)+'日目を行ってください。':'4日間の練習はすべておわりです。ご協力ありがとうございました。'}</p>`;
   info(head+`<div class="stat"><div><b>${s.nTr}</b><span>今日弾いた回数</span></div><div><b>${s.nTr?Math.round(100*s.nOK/s.nTr):0}%</b><span>全部正しく弾けた回</span></div><div><b>${s.score}</b><span>今日の点数</span></div></div><h2>データ</h2><p class="msg note" id="endst">データを送信しています…</p><p class="note">送信できなかった場合は、下のボタンでCSVを保存して実験者に送ってください。</p><div class="row"><button class="btn sub" id="endsave" type="button">CSVで保存</button><button class="btn sub" id="endcopy" type="button">CSVをコピー</button></div><p class="msg note" id="endmsg"></p>`,'','ホームに戻る',goHome,false);
-  $('#endsave').onclick=()=>exportCSV(s.rows,s.csv,$('#endmsg'));
-  $('#endcopy').onclick=()=>copyCSV(s.rows,$('#endmsg'));
+  const srows=()=>allRows().filter(r=>r.session_id===s.sid);
+  $('#endsave').onclick=()=>exportCSV(srows(),s.csv,$('#endmsg'));
+  $('#endcopy').onclick=()=>copyCSV(srows(),$('#endmsg'));
   await Promise.all(s.sends);
-  const r=await sendLog(log,s.sid+'_log');
+  const r=await sendLog(log,`${s.sid}_log_${Date.now()}`);
   const el=$('#endst');if(el)el.textContent=sendText(r);
 }
 
-/* ===== 中止 ===== */
+/* ===== 中断 ===== */
 let wasTask=false;
 function askStop(){if(!S)return;wasTask=$('#task').classList.contains('on');accepting=false;clearTimeout(trialTimer);$('#confirm').classList.add('on');}
 $('#stop').addEventListener('click',askStop);
 $('#infoback').addEventListener('click',askStop);
 $('#cancelstop').addEventListener('click',()=>{$('#confirm').classList.remove('on');if(wasTask&&S&&B&&TR){TR.p=[];nextTrial();}});
-$('#dostop').addEventListener('click',()=>{$('#confirm').classList.remove('on');if(!S)return;if(wasTask&&B)saveBlock();endDay('中止');});
+$('#dostop').addEventListener('click',()=>{$('#confirm').classList.remove('on');if(!S)return;if(wasTask&&B&&B.live)saveBlock(false);endDay('中断');});
 
 /* ===== 鍵盤と入力 ===== */
 $('#keys').innerHTML=FINGER.map((f,i)=>`<div class="key" data-k="${i+1}"><b>${i+1}</b><small>${f}</small></div>`).join('');
@@ -479,6 +524,7 @@ function route(){
   else{S=null;accepting=false;clearTimeout(trialTimer);show('home');renderDays();}
 }
 window.addEventListener('hashchange',route);
+salvage();
 route();
 if(pending().length)setTimeout(()=>flushSoon(),1500);
 }
