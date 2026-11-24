@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>和音系列の学習実験</title>
+<style>
+/* VOICE plain and quiet: an instrument for an experiment, nothing decorative
+   IDEA a plain practice keyboard
+   PICTURE five large keys filling the lower half of a landscape phone
+   COLOUR white and black only; green/red for right/wrong; sequence colours only as cues
+   TYPE system sans
+   LAYOUT home: one column; task: status bar, cue, five keys */
+:root{color-scheme:light dark;--bg:light-dark(#ffffff,#111111);--ink:light-dark(#111111,#eeeeee);--sub:light-dark(#666666,#aaaaaa);--line:light-dark(#cccccc,#444444);--key:light-dark(#f4f4f4,#262626);--keydown:light-dark(#d6d6d6,#444444);--ok:#1a8a4a;--ng:#d0392b}
+:root[data-theme=light]{color-scheme:light}
+:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;-webkit-text-size-adjust:100%;touch-action:manipulation}
+button{font:inherit;color:inherit;cursor:pointer}
+.screen{display:none;height:100%}
+.screen.on{display:flex;flex-direction:column}
+.scroll{overflow-y:auto;flex:1}
+.wrap{max-width:820px;margin:0 auto;padding:16px max(16px,env(safe-area-inset-right)) 24px max(16px,env(safe-area-inset-left))}
+h1{font-size:28px;line-height:1.2;margin:8px 0 10px}
+h2{font-size:19px;margin:20px 0 6px}
+p{margin:0 0 10px}
+ul,ol{margin:4px 0 12px;padding-left:1.3em}
+li{margin:2px 0}
+.note{font-size:14px;color:var(--sub)}
+.btn{min-height:46px;padding:0 20px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);font-weight:700}
+.btn.sub{background:transparent;color:var(--ink);border-color:var(--line)}
+.btn:focus-visible,input:focus-visible,.day:focus-visible{outline:3px solid #2a6df4;outline-offset:2px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=text],input[type=url]{font:inherit;font-size:16px;padding:9px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+#pid{width:9em}
+#gas{width:100%}
+.days{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,170px),1fr));gap:8px;margin:8px 0}
+.day{text-align:left;border:1px solid var(--line);border-radius:8px;background:var(--bg);padding:12px;min-height:44px}
+.day b{display:block;font-size:18px}
+.day span{font-size:14px;color:var(--sub)}
+.day.done span{color:var(--ok);font-weight:700}
+details{margin-top:16px;border-top:1px solid var(--line);padding-top:6px}
+summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:700}
+.bottom{border-top:1px solid var(--line);padding:10px max(16px,env(safe-area-inset-right)) max(10px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:flex;justify-content:space-between;align-items:center;gap:10px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px}
+@media(max-width:640px){.two{grid-template-columns:minmax(0,1fr)}}
+.dg{display:inline-flex;gap:4px;vertical-align:middle}
+.dg i{font-style:normal;width:var(--s,32px);height:calc(var(--s,32px)*1.3);border:2px solid var(--line);border-radius:4px;display:flex;align-items:flex-end;justify-content:center;font-size:calc(var(--s,32px)*.42);color:var(--sub);font-weight:700}
+.dg i.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.shape{width:var(--s,56px);height:var(--s,56px);vertical-align:middle}
+.shape *{fill:none;stroke:var(--ink);stroke-width:9;stroke-linejoin:round}
+.sq{display:inline-block;padding:.1em .6em;border-radius:6px;background:var(--c);color:#fff;font-weight:800}
+.sq.y{color:#111}
+.tbl{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;margin:6px 0}
+.ar{color:var(--sub);margin:0 4px}
+.stat{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0}
+.stat div{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.stat b{display:block;font-size:24px}
+.stat span{font-size:13px;color:var(--sub)}
+.msg{font-size:14px;min-height:1.4em;white-space:pre-line}
+.msg.ng{color:var(--ng)}
+/* task */
+#task{position:fixed;inset:0;background:var(--bg);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.bar{display:flex;align-items:center;gap:12px;padding:4px max(12px,env(safe-area-inset-right)) 2px max(12px,env(safe-area-inset-left));font-size:14px;color:var(--sub);white-space:nowrap}
+.bar .grow{flex:1;overflow:hidden;text-overflow:ellipsis}
+.bar b{color:var(--ink)}
+#stop{min-height:34px;padding:0 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);font-size:14px}
+.cue{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;position:relative;padding:0 12px}
+.cueline{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;min-height:60px}
+.cueline .sq{font-size:clamp(20px,6vh,32px)}
+.asts{display:flex;gap:clamp(6px,1.4vw,12px);font-size:clamp(22px,6vh,32px);font-weight:800;line-height:1;min-height:1.1em}
+.asts span{width:1.05em;text-align:center;color:var(--sub)}
+.asts span.ok{color:var(--ok)}
+.asts span.ng{color:var(--ng)}
+.asts span.cur{color:var(--ink)}
+.asts .gap{width:.5em}
+#fb{position:absolute;right:max(14px,env(safe-area-inset-right));top:2px;font-weight:800;font-size:20px}
+#fb.p{color:var(--ok)}
+#fb.m{color:var(--ng)}
+#skip{position:absolute;left:max(12px,env(safe-area-inset-left));bottom:4px;min-height:38px;padding:0 12px;border-radius:6px;border:1px solid var(--line);background:var(--bg);font-size:14px}
+.keys{display:flex;gap:6px;height:clamp(140px,52vh,300px);padding:0 max(6px,env(safe-area-inset-right)) max(6px,env(safe-area-inset-bottom)) max(6px,env(safe-area-inset-left))}
+.key{flex:1;border:1px solid var(--line);border-radius:8px;background:var(--key);display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding-bottom:8px;touch-action:none}
+.key b{font-size:clamp(20px,6vh,30px);line-height:1}
+.key small{font-size:13px;color:var(--sub)}
+.key.down{background:var(--keydown)}
+#confirm{position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:16px}
+#confirm.on{display:flex}
+#confirm>div{background:var(--bg);border-radius:10px;padding:18px;max-width:420px;width:100%}
+#rotate{position:fixed;inset:0;z-index:9;background:var(--bg);display:none;align-items:center;justify-content:center;text-align:center;padding:24px;font-weight:700}
+@media(orientation:portrait){body.tasking #rotate{display:flex}}
+</style>
+</head>
+<body>
+
+<section id="home" class="screen on">
+  <div class="scroll"><div class="wrap">
+    <h1>和音の指づかい練習</h1>
+    <p>スマホの画面に出る5つの鍵盤を、2本の指で同時に押して和音を鳴らします。決まった順番の和音を覚えて、速く正確に弾けるようになるまでの練習の様子を記録する実験です。</p>
+    <ul>
+      <li>期間：4日間（できれば毎日続けて）</li>
+      <li>時間：1日20分以内</li>
+      <li>使うもの：スマホ（横向き）、右手、音が出る環境</li>
+      <li>名前などの個人情報は記録しません。実験者から伝えられた参加者IDだけを使います。</li>
+    </ul>
+    <div class="row">
+      <label for="pid"><b>参加者ID</b></label>
+      <input id="pid" type="text" autocomplete="off" autocapitalize="characters" placeholder="例：P01">
+      <button class="btn sub" id="soundtest" type="button">音のテスト</button>
+    </div>
+    <p class="msg note" id="homemsg"></p>
+    <h2>今日は何日目ですか？</h2>
+    <p class="note">実験者に指示された日を選んでください。</p>
+    <div class="days" id="days"></div>
+    <details id="exp">
+      <summary>実験者用の設定</summary>
+      <p class="note">送信先（Google Apps Script のウェブアプリURL）。データはブロックごとにここへ送られ、Googleドライブ上のCSVファイルに追記されます。送れなかった分はこの端末に残り、次に開いたときに自動で再送します。</p>
+      <input id="gas" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://script.google.com/macros/s/…/exec">
+      <div class="row" style="margin-top:8px">
+        <button class="btn sub" id="gassave" type="button">保存して接続テスト</button>
+        <button class="btn sub" id="resend" type="button">未送信分を送る</button>
+      </div>
+      <p class="msg note" id="gasmsg"></p>
+      <h2>この端末のデータ</h2>
+      <p class="note">送信とは別に、この端末にも控えを保存しています。</p>
+      <div class="row">
+        <button class="btn sub" id="expsave" type="button">CSVで保存</button>
+        <button class="btn sub" id="expcopy" type="button">CSVをコピー</button>
+        <button class="btn sub" id="expclear" type="button">この端末のデータを消す</button>
+      </div>
+      <p class="msg note" id="expmsg"></p>
+    </details>
+  </div></div>
+</section>
+
+<section id="info" class="screen">
+  <div class="scroll"><div class="wrap" id="infobody"></div></div>
+  <div class="bottom"><span class="note" id="infostep"></span><span class="row"><button class="btn sub" id="infoback" type="button" hidden>中止</button><button class="btn" id="infonext" type="button">次へ</button></span></div>
+</section>
+
+<section id="task" class="screen">
+  <div class="bar"><button id="stop" type="button">中止</button><span class="grow" id="barl"></span><span>点数 <b id="score">0</b></span></div>
+  <div class="cue">
+    <div class="cueline" id="cue"></div>
+    <div class="asts" id="asts"></div>
+    <div id="fb"></div>
+    <button id="skip" type="button">思い出せない</button>
+  </div>
+  <div class="keys" id="keys"></div>
+</section>
+
+<div id="confirm"><div>
+  <p><b>実験を中止しますか？</b></p>
+  <p class="note">ここまでのデータは保存・送信されます。中止した日は、実験者の指示に従ってください。</p>
+  <div class="row" style="justify-content:flex-end"><button class="btn sub" id="cancelstop" type="button">続ける</button><button class="btn" id="dostop" type="button">中止する</button></div>
+</div></div>
+
+<div id="rotate">スマホを横向きにしてください<br>（画面の向きのロックはオフに）</div>
+
+<script>
+{
+/* ===== 送信先：Apps Script のウェブアプリURLをここに貼るか、実験者用の設定欄に入力 ===== */
+const GAS_URL_DEFAULT = "";
+
+const $=s=>document.querySelector(s);
+const ELEM={C:{k:[1,3],f:'I_C.wav'},Dm:{k:[3,4],f:'ii_C.wav'},Em:{k:[1,2],f:'iii_C.wav'},F:{k:[3,5],f:'IV_C.wav'},G:{k:[2,5],f:'V_C.wav'},Am:{k:[1,5],f:'vi_C.wav'},Bdim:{k:[2,4],f:'viio_C.wav'}};
+const PAIR={};for(const e in ELEM)PAIR[ELEM[e].k.join('-')]=e;
+const CHUNKS={circle:['Em','C'],triangle:['F','G'],square:['Bdim','Am'],star:['Dm','C']};
+const SEQS={red:{name:'赤',c:'#d0392b',ch:['circle','triangle','star','square']},blue:{name:'青',c:'#2a5bd7',ch:['triangle','square','circle','star']},green:{name:'緑',c:'#1a8a4a',ch:['square','star','triangle','circle']},yellow:{name:'黄',c:'#e0b000',ch:['star','circle','square','triangle']}};
+const FINGER=['親指','人差し指','中指','薬指','小指'];
+const CAP_MS=17*60*1000;
+const SH={circle:'<circle cx="50" cy="50" r="38"/>',triangle:'<path d="M50 12 L90 84 L10 84 Z"/>',square:'<rect x="14" y="14" width="72" height="72"/>',star:'<path d="M50 8 L61 38 L93 39 L68 59 L77 90 L50 72 L23 90 L32 59 L7 39 L39 38 Z"/>'};
+const shape=(n,s)=>`<svg class="shape" style="--s:${s}px" viewBox="0 0 100 100" aria-label="${n}">${SH[n]}</svg>`;
+const dg=(keys,s)=>`<span class="dg" style="--s:${s}px">${[1,2,3,4,5].map(i=>`<i class="${keys.includes(i)?'on':''}">${i}</i>`).join('')}</span>`;
+const badge=(id,size)=>`<span class="sq ${id==='yellow'?'y':''}" style="--c:${SEQS[id].c}${size?';font-size:'+size+'px':''}">${SEQS[id].name}</span>`;
+const shuffle=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+const median=a=>{if(!a.length)return null;const s=a.slice().sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2;};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls={get:(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch(e){return d;}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}};
+const pad=n=>String(n).padStart(2,'0');
+const stamp=d=>`${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
+
+/* ===== データ形式 ===== */
+const COLS=['participant','day','phase','block','trial','item','cued','pos','target','target_keys','pressed_keys','key1','key1_ms','key2','key2_ms','onset_ms','async_ms','interval_ms','interval_type','correct','trial_complete','trial_correct','mt_ms','points','session_id','time'];
+const LOGCOLS=['session_id','participant','day','status','start','end','n_trials','n_trials_correct','points','user_agent'];
+const cell=v=>{v=v==null?'':String(v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+const toCSV=rows=>[COLS.join(',')].concat(rows.map(r=>COLS.map(c=>cell(r[c])).join(','))).join('\n');
+
+/* ===== 端末内の控え ===== */
+const LS='chordpilot-v2',PKEY='chordpilot-pending',GKEY='chordpilot-gas',IDKEY='chordpilot-pid';
+function localSave(pid,day,rows){const o=ls.get(LS,{});o[pid]=o[pid]||{days:{},rows:{}};const k='d'+day;o[pid].rows[k]=(o[pid].rows[k]||[]).concat(rows);ls.set(LS,o);}
+function markDay(pid,day,status){const o=ls.get(LS,{});o[pid]=o[pid]||{days:{},rows:{}};o[pid].days[day]=status+'（'+new Date().toLocaleDateString('ja-JP')+'）';ls.set(LS,o);}
+const allRows=()=>{const o=ls.get(LS,{}),out=[];for(const p in o)for(const k in (o[p].rows||{}))out.push(...o[p].rows[k]);return out;};
+let dl=null;
+(async()=>{try{if(window.claude&&window.claude.use)dl=await window.claude.use('downloads');}catch(e){dl=null;}})();
+async function exportCSV(rows,name,el){
+  const csv='﻿'+toCSV(rows);
+  if(dl){try{await dl.save({filename:name,data:csv});el.textContent='保存しました：'+name;return;}catch(e){}}
+  else{try{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));a.download=name;document.body.appendChild(a);a.click();a.remove();el.textContent='保存しました：'+name;return;}catch(e){}}
+  copyCSV(rows,el);
+}
+async function copyCSV(rows,el){try{await navigator.clipboard.writeText(toCSV(rows));el.textContent='CSVをコピーしました（'+rows.length+'行）。';}catch(e){el.textContent='コピーできませんでした。';}}
+
+/* ===== Googleドライブへの送信（Apps Script） ===== */
+const gasURL=()=>ls.get(GKEY,'')||GAS_URL_DEFAULT;
+const pending=()=>ls.get(PKEY,[]);
+async function post(payload){
+  const url=gasURL();
+  if(!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec/.test(url))return {ok:false,reason:'送信先URLが設定されていません'};
+  let r;
+  try{r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow',cache:'no-store'});}
+  catch(e){return {ok:false,reason:navigator.onLine===false?'インターネットに接続されていません':'送信先から応答がありません'};}
+  let j=null;try{j=JSON.parse(await r.text());}catch(e){}
+  if(j)return j.ok?{ok:true,info:j}:{ok:false,reason:'スクリプトのエラー：'+(j.error||'不明')};
+  return {ok:false,reason:'応答を読めませんでした（HTTP '+r.status+'）'};
+}
+let sending=false;
+async function flush(){
+  if(sending)return null;sending=true;
+  const list=pending(),sent=new Set();let reason='';
+  for(const p of list){const r=await post(p);if(r.ok)sent.add(p.batch_id);else reason=r.reason;}
+  const left=pending().filter(p=>!sent.has(p.batch_id));
+  ls.set(PKEY,left);sending=false;
+  return {sent:sent.size,left:left.length,reason};
+}
+function enqueue(p){const l=pending();if(!l.some(x=>x.batch_id===p.batch_id))l.push(p);ls.set(PKEY,l);}
+async function flushSoon(){while(sending)await new Promise(r=>setTimeout(r,200));return flush();}
+function sendRows(sid,name,rows,batch){enqueue({action:'append',batch_id:batch,session_id:sid,csv_name:name,columns:COLS,rows:rows.map(r=>COLS.map(c=>r[c]??''))});return flushSoon();}
+function sendLog(row,batch){enqueue({action:'append',batch_id:batch,session_id:row.session_id,csv_name:'sessions_log.csv',columns:LOGCOLS,rows:[LOGCOLS.map(c=>row[c]??'')]});return flushSoon();}
+const sendText=r=>!r?'送信中です…':(r.left?`送信できなかったデータが${r.left}件あります（${r.reason||'送信待ち'}）。この端末には保存済みで、次に開いたときに再送します。`:'データを送信しました。');
+
+/* ===== 音 ===== */
+let ctx=null,bufs={},offs={},cur=null,audioReady=false,raw={},audioErr='';
+/* ページを開いた時点で音のファイルを先読みしておく */
+const rawP=Promise.all(Object.keys(ELEM).map(e=>fetch('audio/'+ELEM[e].f).then(r=>{if(!r.ok)throw new Error('音のファイルが見つかりません（'+ELEM[e].f+'）');return r.arrayBuffer();}).then(ab=>{raw[e]=ab;}))).catch(err=>{audioErr=String(err.message||err);});
+/* タップの中で必ず同期的に呼ぶ：AudioContext を作って起こす（待たない） */
+function unlockAudio(){
+  try{
+    if(!ctx){const AC=window.AudioContext||window.webkitAudioContext;if(!AC){audioErr='このブラウザは音の再生に対応していません';return;}try{ctx=new AC({latencyHint:'interactive'});}catch(e){ctx=new AC();}}
+    if(ctx.state!=='running'&&ctx.resume)ctx.resume().catch(()=>{});
+    const b=ctx.createBuffer(1,1,22050),s=ctx.createBufferSource();s.buffer=b;s.connect(ctx.destination);s.start(0);
+  }catch(e){audioErr='音の準備に失敗しました：'+(e.message||e);}
+}
+const withTimeout=(p,ms)=>Promise.race([p,new Promise(r=>setTimeout(()=>r('timeout'),ms))]);
+async function ensureAudio(){
+  unlockAudio();
+  if(audioReady)return true;
+  if(!ctx)return false;
+  const r=await withTimeout(rawP,10000);
+  if(r==='timeout'){audioErr='音のファイルの読み込みに時間がかかっています。通信のよい場所で、もう一度押してください';return false;}
+  if(audioErr)return false;
+  try{
+    await withTimeout(Promise.all(Object.keys(ELEM).map(async e=>{
+      if(bufs[e])return;
+      const b=await new Promise((res,rej)=>ctx.decodeAudioData(raw[e].slice(0),res,rej));bufs[e]=b;
+      const d=b.getChannelData(0);let pk=0;for(let i=0;i<d.length;i++)pk=Math.max(pk,Math.abs(d[i]));
+      let i=0;while(i<d.length&&Math.abs(d[i])<pk*0.02)i++;offs[e]=Math.max(0,i/b.sampleRate-0.002);
+    })),10000);
+  }catch(e){audioErr='音のファイルを変換できませんでした';return false;}
+  if(Object.keys(bufs).length<7){audioErr='音の準備に時間がかかっています。もう一度押してください';return false;}
+  audioReady=true;return true;
+}
+function play(e){
+  if(!ctx||!bufs[e])return;
+  const t=ctx.currentTime;
+  if(cur){try{cur.g.gain.cancelScheduledValues(t);cur.g.gain.setValueAtTime(cur.g.gain.value,t);cur.g.gain.linearRampToValueAtTime(0,t+0.03);cur.s.stop(t+0.04);}catch(x){}}
+  const s=ctx.createBufferSource(),g=ctx.createGain();s.buffer=bufs[e];s.connect(g).connect(ctx.destination);
+  g.gain.setValueAtTime(0.9,t);g.gain.setValueAtTime(0.9,t+1.0);g.gain.linearRampToValueAtTime(0,t+1.3);
+  s.start(t,offs[e]);s.stop(t+1.35);cur={s,g};
+}
+
+/* ===== ホーム ===== */
+const DAYTXT={1:'押し方 → 記号の練習 → 色の練習の入口',2:'記号の思い出し → 色の練習',3:'色の練習（手がかりが減ります）',4:'色の練習（最終日）'};
+const pid=()=>($('#pid').value||'').trim();
+function renderDays(){
+  const o=ls.get(LS,{}),p=pid(),st=(o[p]&&o[p].days)||{};
+  $('#days').innerHTML=[1,2,3,4].map(d=>`<button class="day ${st[d]?'done':''}" type="button" data-day="${d}"><b>${d}日目</b><span>${st[d]?esc(st[d]):DAYTXT[d]}</span></button>`).join('');
+}
+$('#pid').value=ls.get(IDKEY,'');
+$('#pid').addEventListener('input',()=>{ls.set(IDKEY,pid());renderDays();});
+$('#days').addEventListener('click',e=>{const b=e.target.closest('.day');if(b)location.hash='day-'+b.dataset.day;});
+$('#soundtest').addEventListener('click',async()=>{unlockAudio();$('#homemsg').textContent='読み込み中…';const ok=await ensureAudio().catch(()=>false);if(ok){play('C');$('#homemsg').textContent='ピアノの和音が聞こえましたか？聞こえない場合は、マナーモード（消音）を解除して音量を上げてください。';}else $('#homemsg').textContent=(audioErr||'音を準備できませんでした')+'。もう一度押してください。';});
+$('#gas').value=gasURL();
+$('#gassave').addEventListener('click',async()=>{
+  let v=$('#gas').value.trim();if(/^AKfy[\w-]{20,}$/.test(v))v=`https://script.google.com/macros/s/${v}/exec`;
+  $('#gas').value=v;ls.set(GKEY,v);const m=$('#gasmsg');m.className='msg note';m.textContent='接続を確認しています…';
+  const r=await post({action:'ping'});
+  m.textContent=r.ok?'接続OK'+(r.info.folder?'　保存先フォルダ：'+r.info.folder:''):'接続できません：'+r.reason;if(!r.ok)m.className='msg ng';
+});
+$('#resend').addEventListener('click',async()=>{const m=$('#gasmsg');m.className='msg note';m.textContent='送信中…';const r=await flushSoon();m.textContent=r.sent||r.left?`送信：${r.sent}件　未送信：${r.left}件${r.left?'（'+r.reason+'）':''}`:'未送信のデータはありません';});
+$('#expsave').addEventListener('click',()=>exportCSV(allRows(),'chord_pilot_all.csv',$('#expmsg')));
+$('#expcopy').addEventListener('click',()=>copyCSV(allRows(),$('#expmsg')));
+let clearArm=false;
+$('#expclear').addEventListener('click',()=>{if(!clearArm){clearArm=true;$('#expmsg').textContent='本当に消す場合は、もう一度押してください。';return;}clearArm=false;ls.set(LS,{});renderDays();$('#expmsg').textContent='この端末のデータを消しました（未送信分は残しています）。';});
+
+/* ===== 説明 ===== */
+const keyrow=`<div class="row" style="gap:4px;margin:6px 0">${FINGER.map((f,i)=>`<span style="flex:1;border:1px solid var(--line);border-radius:6px;padding:6px 0;text-align:center;font-size:13px;line-height:1.3"><b style="font-size:18px">${i+1}</b><br>${f}</span>`).join('')}</div>`;
+const chunkTbl=`<div class="tbl">${Object.keys(CHUNKS).map(c=>`${shape(c,36)}<span>${CHUNKS[c].map(e=>dg(ELEM[e].k,20)).join('<span class="ar">→</span>')}</span>`).join('')}</div>`;
+const seqTbl=`<div class="tbl">${Object.keys(SEQS).map(s=>`${badge(s,18)}<span>${SEQS[s].ch.map(c=>shape(c,26)).join(' ')}</span>`).join('')}</div>`;
+const RULES=`<ul><li>2つの鍵盤を<b>同時に</b>押すと和音が鳴ります。</li><li>押したら<b>指を全部離してから</b>次の和音を押します。</li><li><b>正確に、できるだけ速く</b>弾いてください。</li><li>間違えても止まらず、<b>最後まで</b>弾き切ってください。</li><li>画面の＊は、押すたびに <b style="color:var(--ok)">●</b>（正解）か <b style="color:var(--ng)">×</b>（間違い）に変わります。</li><li>続けられないときは、左上の「中止」を押してください。</li></ul>`;
+const POINTS=`<h2>点数</h2><ul><li>まとまり（記号1つ分）を正しく弾くごとに1点</li><li>全部正しく弾けたら、前のブロックの自分より速ければ＋3点、そうでなければ＋1点</li><li>1つでも間違えると−1点</li></ul><p class="note">速さより、まず正確さを大切にしてください。</p>`;
+const PREP=`<p class="note">準備：スマホを横向きにして机に置く／右手の5本の指を鍵盤に置く／マナーモードを解除して音量を上げる。</p>`;
+const INFO={
+ welcome:`<h1>この実験について</h1><p>これから4日間、スマホの鍵盤で「和音の並び」を覚えて弾く練習をしてもらいます。</p><p>画面の下に5つの鍵盤が出ます。鍵盤を<b>2つ同時に</b>押すと、ピアノの和音が1つ鳴ります。押す組み合わせによって、鳴る和音が変わります。</p><p>和音の並びは、2つの和音でできた<b>「まとまり」</b>を4つつなげたものです。まとまりには ${shape('circle',22)} ${shape('triangle',22)} ${shape('square',22)} ${shape('star',22)} の記号が、並び全体には ${badge('red')} などの色が付いています。最初は手がかりを見ながら弾き、だんだん記憶から弾けるように練習します。</p><h2>今日の流れ（20分以内）</h2><ol><li>押し方と図の見方の練習（約2分）</li><li>まとまり（記号）の練習（約10分）</li><li>並び（色）の練習の入口（約4分）</li></ol><p class="note">ブロックの切れ目で休憩できます。音楽の経験は関係ありません。</p>`,
+ setup:`<h1>準備</h1><div class="two"><div><h2>スマホの置き方</h2><ul><li>スマホを<b>横向き</b>にして机の上に置きます。</li><li><b>右手</b>の5本の指を、左から順に鍵盤の上に置きます。</li></ul>${keyrow}<p class="note">指はいつも同じ鍵盤に置いたままにします。</p></div><div><h2>音と環境</h2><ul><li><b>マナーモード（消音）を解除</b>し、音量を上げてください。イヤホンを使ってもかまいません。</li><li>静かな場所で、通知はできるだけオフにしてください。</li><li>途中でページを閉じると、その日の練習は最初からになります（終わったブロックのデータは保存・送信済みです）。</li></ul></div></div>`,
+ press:`<h1>押し方と図の見方</h1><div class="two"><div><h2>図の見方</h2><p>押す鍵盤を示す図が出ます。5つの四角のうち<b>黒い2つ</b>が押す鍵盤です。</p><p>${dg([1,3],32)}</p><p class="note">この図なら、1（親指）と3（中指）を同時に押します。</p></div><div><h2>押し方のルール</h2>${RULES}</div></div><p>まず、図のとおりに押す練習を14回行います。和音の音もよく聞いてください。</p>`,
+ chunk:`<h1>まとまり（記号）の練習</h1><p>記号1つが、2つの和音のまとまりを表します。</p><div class="two"><div><h2>4つのまとまり</h2>${chunkTbl}<p class="note">今は覚えなくて大丈夫です。練習の中で覚えていきます。</p></div><div><h2>進み方</h2><ol><li><b>手がかりあり</b>：記号と、押す鍵盤の図が出ます。図のとおりに弾きます。</li><li>すぐ次に<b>手がかりなし</b>：同じ記号だけが出ます。中身を思い出して弾きます。</li></ol><p class="note">思い出せないときは、左下の「思い出せない」を押すと次に進みます。</p></div></div>${POINTS}`,
+ seq:`<h1>並び（色）の練習</h1><p>色1つが、まとまり4つの並びを表します。8つの和音を続けて弾きます。</p><div class="two"><div><h2>4つの並び</h2>${seqTbl}<p class="note">これも今は覚えなくて大丈夫です。</p></div><div><h2>進み方</h2><ul><li><b>手がかりあり</b>：色と、記号の並びが出ます（鍵盤の図は出ません）。</li><li><b>手がかりなし</b>：色だけが出ます。並び全体を思い出して弾きます。</li></ul></div></div>${POINTS}`,
+ d2:`<h1>2日目</h1><p>昨日の続きです。押し方のルールは同じです。</p><div class="two"><div><h2>今日の流れ（20分以内）</h2><ol><li>まとまり（記号）の思い出し：1ブロック</li><li>並び（色）の練習：数ブロック</li></ol></div><div><h2>ルール</h2>${RULES}</div></div>${PREP}`,
+ d34:d=>`<h1>${d}日目</h1><p>今日は並び（色）の練習だけです。${d===4?'今日が最終日です。':''}</p><div class="two"><div><h2>今日の流れ（20分以内）</h2><p>並びの練習を数ブロック行います。今日は<b>手がかりありが1回、そのあと手がかりなしが3回</b>の順に出ます。</p></div><div><h2>ルール</h2>${RULES}</div></div>${PREP}`
+};
+const rep=(n,f)=>Array.from({length:n},(_,k)=>f(k+1));
+const PLANS={
+ 1:[{i:'welcome'},{i:'setup'},{i:'press'},{b:'practice'},{i:'chunk'},...rep(6,k=>({b:'chunk',k,n:6})),{i:'seq'},{b:'seq',mode:'alt',k:1,n:1}],
+ 2:[{i:'d2'},{b:'chunk',k:1,n:1},{i:'seq'},...rep(4,k=>({b:'seq',mode:'alt',k,n:4}))],
+ 3:[{i:'d34'},...rep(7,k=>({b:'seq',mode:'mix',k,n:7}))],
+ 4:[{i:'d34'},...rep(7,k=>({b:'seq',mode:'mix',k,n:7}))]
+};
+const PHASENAME={practice:'押し方の練習',chunk:'まとまりの練習',seq:'並びの練習'};
+
+/* ===== 進行 ===== */
+let S=null,B=null,TR=null,accepting=false;
+function show(id){document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('on',s.id===id));document.body.classList.toggle('tasking',id==='task');}
+function info(html,step,next,onNext,showStop){$('#infobody').innerHTML=html;$('#infostep').textContent=step;$('#infonext').textContent=next;$('#infonext').onclick=onNext;$('#infoback').hidden=!showStop;show('info');$('#info .scroll').scrollTop=0;}
+function goHome(){if(location.hash){history.replaceState(null,'',location.pathname+location.search);}route();}
+function startDay(d){
+  const p=pid();
+  if(!p){history.replaceState(null,'',location.pathname+location.search);show('home');renderDays();$('#homemsg').textContent='先に参加者IDを入力してください。';$('#pid').focus();return;}
+  const t0=new Date();
+  S={pid:p,day:d,plan:PLANS[d],i:0,score:0,taskStart:null,prevMed:{},rows:[],nTr:0,nOK:0,start:t0,sid:`${p}_d${d}_${t0.getTime().toString(36)}`,csv:`chord_pilot_${p}_day${d}_${stamp(t0)}.csv`.replace(/[^\w.-]/g,'_'),sends:[]};
+  runStep();
+}
+function runStep(){
+  if(!S)return;
+  const st=S.plan[S.i];
+  if(!st)return endDay('完了');
+  if(st.b&&st.b!=='practice'&&S.taskStart&&performance.now()-S.taskStart>CAP_MS){S.i=S.plan.length;return endDay('完了',true);}
+  if(st.i){const h=typeof INFO[st.i]==='function'?INFO[st.i](S.day):INFO[st.i];return info(h,`${S.day}日目　説明`,'次へ',()=>{S.i++;runStep();},true);}
+  info(`<h1>${PHASENAME[st.b]}${st.n?`　ブロック ${st.k}／${st.n}`:''}</h1><p>右手の5本の指を鍵盤の上に置いてから「はじめる」を押してください。</p><p class="msg" id="startmsg"></p>`,`${S.day}日目`,'はじめる',async()=>{
+    const btn=$('#infonext'),m=$('#startmsg');
+    unlockAudio();
+    /* 全画面・横向き固定は「試すだけ」で待たない（対応していない端末で止まらないように） */
+    try{const fs=document.documentElement.requestFullscreen;if(fs&&!document.fullscreenElement){const q=fs.call(document.documentElement);if(q&&q.catch)q.catch(()=>{});}}catch(e){}
+    try{if(screen.orientation&&screen.orientation.lock){const q=screen.orientation.lock('landscape');if(q&&q.catch)q.catch(()=>{});}}catch(e){}
+    btn.disabled=true;m.className='msg note';m.textContent='音を準備しています…';
+    const ok=await ensureAudio().catch(()=>false);
+    btn.disabled=false;
+    if(!ok){m.className='msg ng';m.textContent=(audioErr||'音を準備できませんでした')+'。もう一度「はじめる」を押してください。';return;}
+    if(!S)return;
+    if(!S.taskStart)S.taskStart=performance.now();
+    runBlock(st);
+  },true);
+}
+function buildTrials(st){
+  const T=[],cof=[0,0,1,1,2,2,3,3],seqT=s=>[].concat(...SEQS[s].ch.map(c=>CHUNKS[c]));
+  if(st.b==='practice'){for(let r=0;r<2;r++)shuffle(Object.keys(ELEM)).forEach(e=>T.push({item:e,cued:1,targets:[e],cof:[0]}));}
+  else if(st.b==='chunk')shuffle([].concat(...Object.keys(CHUNKS).map(c=>[c,c,c]))).forEach(c=>T.push({item:c,cued:1,targets:CHUNKS[c],cof:[0,0]},{item:c,cued:0,targets:CHUNKS[c],cof:[0,0]}));
+  else if(st.mode==='alt')shuffle([].concat(...Object.keys(SEQS).map(s=>[s,s,s]))).forEach(s=>T.push({item:s,cued:1,targets:seqT(s),cof},{item:s,cued:0,targets:seqT(s),cof}));
+  else shuffle(Object.keys(SEQS)).forEach(s=>{T.push({item:s,cued:1,targets:seqT(s),cof});for(let r=0;r<3;r++)T.push({item:s,cued:0,targets:seqT(s),cof});});
+  return T;
+}
+function runBlock(st){const n=st.b==='practice'?1:st.b==='chunk'?2:8;B={st,phase:st.b,trials:buildTrials(st),ti:0,rows:[],mts:[],ok:0,pts:0,mmt:S.prevMed[st.b]||n*600};show('task');nextTrial();}
+function cueHTML(t){
+  if(B.phase==='practice')return dg(ELEM[t.item].k,44);
+  if(B.phase==='chunk')return shape(t.item,60)+(t.cued?`<span class="ar">｜</span>${t.targets.map(e=>dg(ELEM[e].k,28)).join('<span class="ar">→</span>')}`:'');
+  return badge(t.item)+(t.cued?`<span class="ar">｜</span>${SEQS[t.item].ch.map(c=>shape(c,44)).join('<span class="ar">→</span>')}`:'');
+}
+function renderAsts(){let h='';TR.t.targets.forEach((_,i)=>{if(i&&TR.t.cof[i]!==TR.t.cof[i-1])h+='<span class="gap"></span>';const p=TR.p[i];h+=`<span class="${p?(p.correct?'ok':'ng'):(i===TR.p.length?'cur':'')}">${p?(p.correct?'●':'×'):'＊'}</span>`;});$('#asts').innerHTML=h;}
+let trialTimer=null;
+function nextTrial(){
+  if(B.ti>=B.trials.length)return endBlock();
+  const t=B.trials[B.ti];TR={t,p:[],t0:0};
+  $('#barl').innerHTML=`${PHASENAME[B.phase]}　ブロック <b>${B.st.k||1}/${B.st.n||1}</b>　${B.ti+1}/${B.trials.length}回目　${t.cued?'手がかりあり':'<b>手がかりなし</b>'}`;
+  $('#fb').textContent='';$('#cue').innerHTML='';$('#asts').innerHTML='';$('#skip').style.visibility='hidden';
+  clearTimeout(trialTimer);
+  trialTimer=setTimeout(()=>{$('#cue').innerHTML=cueHTML(t);renderAsts();$('#skip').style.visibility=t.cued?'hidden':'visible';TR.t0=performance.now();accepting=true;},350);
+}
+function record(keys,times,el,tOn){
+  if(!accepting||!TR)return;
+  const i=TR.p.length;
+  TR.p.push({keys,times:times.map(x=>x-TR.t0),el:el||'',correct:el===TR.t.targets[i],onset:tOn-TR.t0,async:times.length>1?times[1]-times[0]:0});
+  renderAsts();
+  if(TR.p.length>=TR.t.targets.length)finishTrial(true);
+}
+function markExtra(){if(!accepting||!TR||!TR.p.length)return;const p=TR.p[TR.p.length-1];if(p.correct){p.correct=false;p.extra=1;renderAsts();}}
+function finishTrial(complete){
+  accepting=false;
+  const t=TR.t,P=TR.p,n=t.targets.length,allOK=complete&&P.every(p=>p.correct);
+  const mt=complete?(P.length>1?P[P.length-1].onset-P[0].onset:P[0].onset):null;
+  let pts=0;
+  if(B.phase!=='practice'){
+    for(let c=0;c<=Math.max(...t.cof);c++)if(t.cof.every((v,i)=>v!==c||(P[i]&&P[i].correct)))pts++;
+    pts+=allOK?(mt<0.8*B.mmt?3:1):-1;S.score+=pts;B.pts+=pts;$('#score').textContent=S.score;
+  }
+  if(allOK){B.ok++;B.mts.push(mt);S.nOK++;}
+  S.nTr++;
+  const now=new Date().toISOString();
+  for(let i=0;i<n;i++){
+    const p=P[i],q=P[i-1];
+    B.rows.push({participant:S.pid,day:S.day,phase:B.phase,block:B.st.k||1,trial:B.ti+1,item:t.item,cued:t.cued,pos:i+1,target:t.targets[i],target_keys:ELEM[t.targets[i]].k.join('+'),
+      pressed_keys:p?p.keys.join('+'):'',key1:p?p.keys[0]:'',key1_ms:p&&p.times[0]!=null?p.times[0].toFixed(1):'',key2:p&&p.keys[1]!=null?p.keys[1]:'',key2_ms:p&&p.times[1]!=null?p.times[1].toFixed(1):'',
+      onset_ms:p?p.onset.toFixed(1):'',async_ms:p?p.async.toFixed(1):'',interval_ms:p&&q?(p.onset-q.onset).toFixed(1):'',interval_type:!i||B.phase==='practice'?'':(t.cof[i]===t.cof[i-1]?'within':'between'),
+      correct:p?(p.correct?1:0):'',trial_complete:complete?1:0,trial_correct:allOK?1:0,mt_ms:mt==null?'':mt.toFixed(1),points:pts,session_id:S.sid,time:now});
+  }
+  renderAsts();
+  const fb=$('#fb');
+  if(B.phase==='practice'){fb.textContent=allOK?'OK':'図をよく見てみましょう';fb.className=allOK?'p':'m';}
+  else{fb.textContent=(pts>0?'+':'')+pts+' 点';fb.className=pts>0?'p':'m';}
+  $('#skip').style.visibility='hidden';
+  clearTimeout(trialTimer);trialTimer=setTimeout(()=>{B.ti++;nextTrial();},900);
+}
+$('#skip').addEventListener('click',()=>{if(accepting&&TR)finishTrial(false);});
+function saveBlock(){
+  if(!B||!B.rows.length)return null;
+  const rows=B.rows;B.rows=[];S.rows.push(...rows);localSave(S.pid,S.day,rows);
+  const p=sendRows(S.sid,S.csv,rows,`${S.sid}_${B.phase}_b${B.st.k||1}_${S.rows.length}`);S.sends.push(p);return p;
+}
+async function endBlock(){
+  const med=median(B.mts);if(med)S.prevMed[B.phase]=med;
+  const sp=saveBlock();S.i++;
+  try{if(document.fullscreenElement){const q=document.exitFullscreen();if(q&&q.catch)q.catch(()=>{});}}catch(e){}
+  let h;
+  if(B.phase==='practice')h=`<h1>押し方の練習はおわりです</h1><p>14回中 ${B.ok}回、図のとおりに押せました。次は、記号の練習の説明です。</p>`;
+  else{
+    const last=!S.plan.slice(S.i).some(s=>s.b);
+    h=`<h1>ブロック ${B.st.k}／${B.st.n} おわり</h1><div class="stat"><div><b>${Math.round(100*B.ok/B.trials.length)}%</b><span>全部正しく弾けた回</span></div><div><b>${med?(med/1000).toFixed(2)+' 秒':'―'}</b><span>正しく弾けた回の時間（中央値）</span></div><div><b>${B.pts}</b><span>このブロックの点数</span></div></div><p>${last?'これで今日の練習はおわりです。':'少し休んで、準備ができたら「次へ」を押してください。'}</p>`;
+  }
+  info(h+`<p class="msg note" id="savest">データを送信しています…</p>`,`${S.day}日目`,'次へ',()=>runStep(),true);
+  if(sp)sp.then(r=>{const el=$('#savest');if(el)el.textContent=sendText(r);});
+}
+async function endDay(status,capped){
+  const s=S;S=null;accepting=false;clearTimeout(trialTimer);
+  markDay(s.pid,s.day,status==='完了'?'済':'中止');
+  try{if(document.fullscreenElement){const q=document.exitFullscreen();if(q&&q.catch)q.catch(()=>{});}}catch(e){}
+  const log={session_id:s.sid,participant:s.pid,day:s.day,status:status,start:s.start.toISOString(),end:new Date().toISOString(),n_trials:s.nTr,n_trials_correct:s.nOK,points:s.score,user_agent:navigator.userAgent};
+  const head=status==='中止'?`<h1>${s.day}日目の練習を中止しました</h1><p>ここまでのデータは保存しました。続きをどうするかは、実験者の指示に従ってください。</p>`:`<h1>${s.day}日目の練習はおわりです</h1><p>おつかれさまでした。${capped?'時間になったので、ここで終了します。':''}${s.day<4?'次は明日、'+(s.day+1)+'日目を行ってください。':'4日間の練習はすべておわりです。ご協力ありがとうございました。'}</p>`;
+  info(head+`<div class="stat"><div><b>${s.nTr}</b><span>今日弾いた回数</span></div><div><b>${s.nTr?Math.round(100*s.nOK/s.nTr):0}%</b><span>全部正しく弾けた回</span></div><div><b>${s.score}</b><span>今日の点数</span></div></div><h2>データ</h2><p class="msg note" id="endst">データを送信しています…</p><p class="note">送信できなかった場合は、下のボタンでCSVを保存して実験者に送ってください。</p><div class="row"><button class="btn sub" id="endsave" type="button">CSVで保存</button><button class="btn sub" id="endcopy" type="button">CSVをコピー</button></div><p class="msg note" id="endmsg"></p>`,'','ホームに戻る',goHome,false);
+  $('#endsave').onclick=()=>exportCSV(s.rows,s.csv,$('#endmsg'));
+  $('#endcopy').onclick=()=>copyCSV(s.rows,$('#endmsg'));
+  await Promise.all(s.sends);
+  const r=await sendLog(log,s.sid+'_log');
+  const el=$('#endst');if(el)el.textContent=sendText(r);
+}
+
+/* ===== 中止 ===== */
+let wasTask=false;
+function askStop(){if(!S)return;wasTask=$('#task').classList.contains('on');accepting=false;clearTimeout(trialTimer);$('#confirm').classList.add('on');}
+$('#stop').addEventListener('click',askStop);
+$('#infoback').addEventListener('click',askStop);
+$('#cancelstop').addEventListener('click',()=>{$('#confirm').classList.remove('on');if(wasTask&&S&&B&&TR){TR.p=[];nextTrial();}});
+$('#dostop').addEventListener('click',()=>{$('#confirm').classList.remove('on');if(!S)return;if(wasTask&&B)saveBlock();endDay('中止');});
+
+/* ===== 鍵盤と入力 ===== */
+$('#keys').innerHTML=FINGER.map((f,i)=>`<div class="key" data-k="${i+1}"><b>${i+1}</b><small>${f}</small></div>`).join('');
+const keyEl={};document.querySelectorAll('.key').forEach(k=>keyEl[k.dataset.k]=k);
+const down=new Map(),ptr=new Map();let chordOn=false;
+function kDown(k,t){
+  if(down.has(k))return;down.set(k,t);keyEl[k].classList.add('down');
+  if(!chordOn){if(down.size===2){chordOn=true;const ent=[...down.entries()].sort((a,b)=>a[1]-b[1]),ks=ent.map(x=>+x[0]),el=PAIR[ks.slice().sort((a,b)=>a-b).join('-')];if(el)play(el);record(ks,ent.map(x=>x[1]),el,t);}}
+  else markExtra();
+}
+function kUp(k){
+  if(!down.has(k))return;const t=down.get(k);down.delete(k);keyEl[k].classList.remove('down');
+  if(!down.size){if(chordOn)chordOn=false;else record([+k],[t],null,t);}
+}
+const ts=e=>(e&&e.timeStamp>0&&e.timeStamp<performance.now()+1000)?e.timeStamp:performance.now();
+$('#keys').addEventListener('pointerdown',e=>{const k=e.target.closest('.key');if(!k)return;e.preventDefault();ptr.set(e.pointerId,k.dataset.k);kDown(k.dataset.k,ts(e));});
+const up=e=>{const k=ptr.get(e.pointerId);if(k==null)return;ptr.delete(e.pointerId);kUp(k);};
+window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
+$('#keys').addEventListener('touchstart',e=>e.preventDefault(),{passive:false});
+$('#keys').addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('keydown',e=>{if(e.repeat||!/^[1-5]$/.test(e.key)||!$('#task').classList.contains('on'))return;kDown(e.key,performance.now());});
+window.addEventListener('keyup',e=>{if(/^[1-5]$/.test(e.key))kUp(e.key);});
+
+/* ===== 画面の切り替え（#day-1〜#day-4 で各日に直接入れる） ===== */
+function route(){
+  const m=/^#day-([1-4])$/.exec(location.hash);
+  if(m){if(!S||S.day!==+m[1])startDay(+m[1]);}
+  else{S=null;accepting=false;clearTimeout(trialTimer);show('home');renderDays();}
+}
+window.addEventListener('hashchange',route);
+route();
+if(pending().length)setTimeout(()=>flushSoon(),1500);
+}
+</script>
+</body>
+</html>
